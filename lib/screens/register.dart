@@ -1,28 +1,45 @@
 import 'package:flutter/material.dart';
 import 'package:on_tap_1/database/database_helper.dart';
 import 'package:on_tap_1/models/user.dart';
+import 'package:on_tap_1/screens/base_form.dart';
 import 'package:on_tap_1/screens/login.dart';
 
-class Register extends StatefulWidget {
+class Register extends BaseFormScreen {
   @override
   _RegisterFormState createState() => _RegisterFormState();
 }
 
-class _RegisterFormState extends State<Register> {
-  final _formKey = GlobalKey<FormState>();
+class _RegisterFormState extends BaseFormScreenState<Register>
+    with SingleTickerProviderStateMixin {
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _confirmPassCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
-
   DateTime? _birthDate;
   String? _gender;
   final _genders = ['Nam', 'Nữ', 'Khác'];
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
-  void _showSnack(String message) => ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text(message)));
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 1000),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
+    );
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
 
   Future<void> _selectDate() async {
     final picked = await showDatePicker(
@@ -30,14 +47,27 @@ class _RegisterFormState extends State<Register> {
       initialDate: DateTime.now(),
       firstDate: DateTime(1900),
       lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Theme.of(context).primaryColor,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null) setState(() => _birthDate = picked);
   }
 
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!formKey.currentState!.validate()) return;
     if (_passCtrl.text != _confirmPassCtrl.text) {
-      _showSnack('Mật khẩu không khớp!');
+      showSnack('Mật khẩu không khớp!');
       return;
     }
 
@@ -51,139 +81,393 @@ class _RegisterFormState extends State<Register> {
     );
 
     DatabaseHelper.instance.insertUser(user);
-    _showSnack('Đăng ký thành công: ${user.name}, ${user.email}');
-    _formKey.currentState!.reset();
-  }
-
-  Widget _buildTextField(
-    TextEditingController controller,
-    String label, {
-    bool obscure = false,
-    String? Function(String?)? validator,
-    TextInputType keyboard = TextInputType.text,
-  }) {
-    return TextFormField(
-      controller: controller,
-      decoration: InputDecoration(labelText: label),
-      obscureText: obscure,
-      keyboardType: keyboard,
-      validator:
-          validator ??
-          (val) => (val == null || val.isEmpty) ? 'Vui lòng nhập $label' : null,
-    );
+    showSnack('Đăng ký thành công: ${user.name}, ${user.email}');
+    formKey.currentState!.reset();
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Image.network("https://th.bing.com/th/id/OIP.4H1DAYzCZ7UiE9PkBUkb_QHaEo?w=271&h=180&c=7&r=0&o=7&dpr=1.5&pid=1.7&rm=3")
-      
-      ),
-      body: Padding(
-        padding: EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Center(
-            child:   ListView(
-            children: [
-              _buildTextField(_nameCtrl, 'Họ và tên'),
-              ListTile(
-                title: Text(
-                  _birthDate == null
-                      ? 'Chọn ngày sinh'
-                      : 'Ngày sinh: ${_birthDate!.toLocal()}'.split(' ')[0],
-                ),
-                trailing: Icon(Icons.calendar_today),
-                onTap: _selectDate,
+  String getTitle() => 'Đăng ký tài khoản';
+
+  @override
+  List<Widget> buildFormFields() => [
+    FadeTransition(
+      opacity: _fadeAnimation,
+      child: Container(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Theme.of(context).primaryColor.withOpacity(0.1),
               ),
-              DropdownButtonFormField<String>(
-                value: _gender,
-                hint: Text('Chọn giới tính'),
-                items:
-                    _genders
-                        .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                        .toList(),
-                onChanged: (val) => setState(() => _gender = val),
-                validator:
-                    (val) =>
-                        (val == null || val.isEmpty)
-                            ? 'Vui lòng chọn giới tính'
-                            : null,
-              ),
-              _buildTextField(
-                _emailCtrl,
-                'Email',
-                keyboard: TextInputType.emailAddress,
-                validator: (val) {
-                  if (val == null || val.isEmpty) return 'Vui lòng nhập Email';
-                  if (!RegExp(
-                    r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                  ).hasMatch(val))
-                    return 'Email không hợp lệ';
-                  return null;
-                },
-              ),
-              _buildTextField(
-                _phoneCtrl,
-                'Số điện thoại',
-                keyboard: TextInputType.phone,
-                validator: (val) {
-                  if (val == null || val.isEmpty)
-                    return 'Vui lòng nhập số điện thoại';
-                  if (!RegExp(r'^\d{10,11}$').hasMatch(val))
-                    return 'Số điện thoại không hợp lệ';
-                  return null;
-                },
-              ),
-              _buildTextField(
-                _passCtrl,
-                'Mật khẩu',
-                obscure: true,
-                validator: (val) {
-                  if (val == null || val.isEmpty)
-                    return 'Vui lòng nhập mật khẩu';
-                  if (val.length < 6) return 'Mật khẩu phải có ít nhất 6 ký tự';
-                  return null;
-                },
-              ),
-              _buildTextField(
-                _confirmPassCtrl,
-                'Xác nhận mật khẩu',
-                obscure: true,
-                validator:
-                    (val) =>
-                        (val != _passCtrl.text) ? 'Mật khẩu không khớp' : null,
-              ),
-              SizedBox(height: 20),
-              ElevatedButton(onPressed: _submit, child: Text('Đăng ký')),
-              TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => Login()),
-                  );
-                },
-                child: Text('Đã có tài khoản? Đăng nhập'),
-              ),
-            ],
-          ),
-          ),
-        
+            ),
+            Icon(
+              Icons.person_add,
+              size: 80,
+              color: Theme.of(context).primaryColor,
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+    FadeTransition(
+      opacity: _fadeAnimation,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: Text(
+          "Tạo tài khoản mới",
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).primaryColor,
+            letterSpacing: 1.2,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
+    ),
+    SizedBox(height: 20),
+    FadeTransition(
+      opacity: _fadeAnimation,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: TextFormField(
+          controller: _nameCtrl,
+          decoration: InputDecoration(
+            labelText: 'Họ và tên',
+            prefixIcon: Icon(
+              Icons.person,
+              color: Theme.of(context).primaryColor,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(
+                color: Theme.of(context).primaryColor,
+                width: 2,
+              ),
+            ),
+            filled: true,
+            fillColor: Colors.grey[50],
+            contentPadding: EdgeInsets.symmetric(vertical: 16),
+          ),
+        ),
+      ),
+    ),
+    SizedBox(height: 16),
+    FadeTransition(
+      opacity: _fadeAnimation,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: InkWell(
+          onTap: _selectDate,
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: 'Ngày sinh',
+              prefixIcon: Icon(
+                Icons.calendar_today,
+                color: Theme.of(context).primaryColor,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide(color: Colors.grey[300]!),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide(color: Colors.grey[300]!),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide(
+                  color: Theme.of(context).primaryColor,
+                  width: 2,
+                ),
+              ),
+              filled: true,
+              fillColor: Colors.grey[50],
+              contentPadding: EdgeInsets.symmetric(vertical: 16),
+            ),
+            child: Text(
+              _birthDate == null
+                  ? 'Chọn ngày sinh'
+                  : '${_birthDate!.day}/${_birthDate!.month}/${_birthDate!.year}',
+            ),
+          ),
+        ),
+      ),
+    ),
+    SizedBox(height: 16),
+    FadeTransition(
+      opacity: _fadeAnimation,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: DropdownButtonFormField<String>(
+          value: _gender,
+          decoration: InputDecoration(
+            labelText: 'Giới tính',
+            prefixIcon: Icon(
+              Icons.people,
+              color: Theme.of(context).primaryColor,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(
+                color: Theme.of(context).primaryColor,
+                width: 2,
+              ),
+            ),
+            filled: true,
+            fillColor: Colors.grey[50],
+            contentPadding: EdgeInsets.symmetric(vertical: 16),
+          ),
+          items:
+              _genders
+                  .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                  .toList(),
+          onChanged: (val) => setState(() => _gender = val),
+          validator: (val) => val == null ? 'Vui lòng chọn giới tính' : null,
+        ),
+      ),
+    ),
+    SizedBox(height: 16),
+    FadeTransition(
+      opacity: _fadeAnimation,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: TextFormField(
+          controller: _emailCtrl,
+          keyboardType: TextInputType.emailAddress,
+          decoration: InputDecoration(
+            labelText: 'Email',
+            prefixIcon: Icon(
+              Icons.email,
+              color: Theme.of(context).primaryColor,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(
+                color: Theme.of(context).primaryColor,
+                width: 2,
+              ),
+            ),
+            filled: true,
+            fillColor: Colors.grey[50],
+            contentPadding: EdgeInsets.symmetric(vertical: 16),
+          ),
+          validator: (val) {
+            if (val == null || val.isEmpty) return 'Vui lòng nhập Email';
+            if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(val))
+              return 'Email không hợp lệ';
+            return null;
+          },
+        ),
+      ),
+    ),
+    SizedBox(height: 16),
+    FadeTransition(
+      opacity: _fadeAnimation,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: TextFormField(
+          controller: _phoneCtrl,
+          keyboardType: TextInputType.phone,
+          decoration: InputDecoration(
+            labelText: 'Số điện thoại',
+            prefixIcon: Icon(
+              Icons.phone,
+              color: Theme.of(context).primaryColor,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(
+                color: Theme.of(context).primaryColor,
+                width: 2,
+              ),
+            ),
+            filled: true,
+            fillColor: Colors.grey[50],
+            contentPadding: EdgeInsets.symmetric(vertical: 16),
+          ),
+          validator: (val) {
+            if (val == null || val.isEmpty)
+              return 'Vui lòng nhập số điện thoại';
+            if (!RegExp(r'^\d{10,11}$').hasMatch(val))
+              return 'Số điện thoại không hợp lệ';
+            return null;
+          },
+        ),
+      ),
+    ),
+    SizedBox(height: 16),
+    FadeTransition(
+      opacity: _fadeAnimation,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: TextFormField(
+          controller: _passCtrl,
+          obscureText: true,
+          decoration: InputDecoration(
+            labelText: 'Mật khẩu',
+            prefixIcon: Icon(Icons.lock, color: Theme.of(context).primaryColor),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(
+                color: Theme.of(context).primaryColor,
+                width: 2,
+              ),
+            ),
+            filled: true,
+            fillColor: Colors.grey[50],
+            contentPadding: EdgeInsets.symmetric(vertical: 16),
+          ),
+          validator: (val) {
+            if (val == null || val.isEmpty) return 'Vui lòng nhập mật khẩu';
+            if (val.length < 6) return 'Mật khẩu phải có ít nhất 6 ký tự';
+            return null;
+          },
+        ),
+      ),
+    ),
+    SizedBox(height: 16),
+    FadeTransition(
+      opacity: _fadeAnimation,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: TextFormField(
+          controller: _confirmPassCtrl,
+          obscureText: true,
+          decoration: InputDecoration(
+            labelText: 'Xác nhận mật khẩu',
+            prefixIcon: Icon(
+              Icons.lock_outline,
+              color: Theme.of(context).primaryColor,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(
+                color: Theme.of(context).primaryColor,
+                width: 2,
+              ),
+            ),
+            filled: true,
+            fillColor: Colors.grey[50],
+            contentPadding: EdgeInsets.symmetric(vertical: 16),
+          ),
+          validator:
+              (val) => val != _passCtrl.text ? 'Mật khẩu không khớp' : null,
+        ),
+      ),
+    ),
+    SizedBox(height: 20),
+    FadeTransition(
+      opacity: _fadeAnimation,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: _submit,
+          child: Text(
+            'Đăng ký',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          style: ElevatedButton.styleFrom(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+            elevation: 2,
+          ),
+        ),
+      ),
+    ),
+    FadeTransition(
+      opacity: _fadeAnimation,
+      child: TextButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => Login()),
+          );
+        },
+        child: Text(
+          'Đã có tài khoản? Đăng nhập',
+          style: TextStyle(
+            color: Theme.of(context).primaryColor,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    ),
+  ];
 
   @override
-  void dispose() {
-    [
-      _nameCtrl,
-      _emailCtrl,
-      _passCtrl,
-      _confirmPassCtrl,
-      _phoneCtrl,
-    ].forEach((c) => c.dispose());
-    super.dispose();
+  Widget buildForm(BuildContext context, List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.white,
+            Theme.of(context).primaryColor.withOpacity(0.1),
+          ],
+        ),
+      ),
+      child: ListView(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        children: children,
+      ),
+    );
   }
 }
